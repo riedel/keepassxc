@@ -23,8 +23,6 @@
 #include <QLineEdit>
 #include <QPointer>
 
-class QTimer;
-
 class PasswordEdit : public QLineEdit
 {
     Q_OBJECT
@@ -41,8 +39,7 @@ public slots:
     void setShowPassword(bool show);
 
 protected:
-    void showEvent(QShowEvent* event) override;
-    void hideEvent(QHideEvent* event) override;
+    bool event(QEvent* event) override;
 
 signals:
     void showPasswordChanged(bool show);
@@ -60,7 +57,6 @@ private:
     QPointer<QAction> m_errorAction;
     QPointer<QAction> m_correctAction;
     QPointer<PasswordEdit> m_basePasswordEdit;
-    QPointer<QTimer> m_capslockPollTimer;
 };
 
 #endif // KEEPASSX_PASSWORDEDIT_H
