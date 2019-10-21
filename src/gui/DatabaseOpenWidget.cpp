@@ -54,6 +54,11 @@ DatabaseOpenWidget::DatabaseOpenWidget(QWidget* parent)
     m_ui->labelHeadline->setFont(font);
     m_ui->labelHeadline->setText(tr("Unlock KeePassXC Database"));
 
+    m_ui->capslockWarningLabel->setVisible(false);
+    connect(m_ui->editPassword, &PasswordEdit::capslockToggled, [&](bool state) {
+        m_ui->capslockWarningLabel->setVisible(state);
+    });
+
     m_ui->comboKeyFile->lineEdit()->addAction(m_ui->keyFileClearIcon, QLineEdit::TrailingPosition);
 
     m_ui->buttonTogglePassword->setIcon(filePath()->onOffIcon("actions", "password-show"));
@@ -82,12 +87,6 @@ DatabaseOpenWidget::DatabaseOpenWidget(QWidget* parent)
     m_ui->yubikeyProgress->setSizePolicy(sp);
 
     connect(m_ui->buttonRedetectYubikey, SIGNAL(clicked()), SLOT(pollYubikey()));
-
-    m_ui->capsLockWarningLabel->setVisible(false);
-    connect(m_ui->editPassword, &PasswordEdit::capslockToggled, [&](bool state) {
-        m_ui->capsLockWarningLabel->setVisible(state);
-    });
-
 #else
     m_ui->hardwareKeyLabel->setVisible(false);
     m_ui->hardwareKeyLabelHelp->setVisible(false);

@@ -159,7 +159,7 @@
                  </widget>
                 </item>
                 <item>
-                 <widget class="QLabel" name="capsLockWarningLabel">
+                 <widget class="QLabel" name="capslockWarningLabel">
                   <property name="styleSheet">
                    <string notr="true">QLabel { color: rgb(255, 125, 125); }</string>
                   </property>

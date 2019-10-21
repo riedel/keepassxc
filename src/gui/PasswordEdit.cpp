@@ -22,6 +22,9 @@
 #include "core/FilePath.h"
 #include "gui/Font.h"
 
+#include <QGuiApplication>
+#include <qpa/qplatformnativeinterface.h>
+
 #if defined(Q_OS_WIN)
 #include <windows.h>
 #elif defined(Q_OS_MACOS)
@@ -145,19 +148,27 @@ bool PasswordEdit::event(QEvent* event)
 void PasswordEdit::checkCapslockState()
 {
     bool newCapslockState = m_capslockState;
+    Q_UNUSED(m_capslockState)
 
 #if defined(Q_OS_WIN)
     newCapslockState = (GetKeyState(VK_CAPITAL) == 1);
 #elif defined(Q_OS_MACOS)
     newCapslockState = ((CGEventSourceFlagsState(kCGEventSourceStateHIDSystemState) & kCGEventFlagMaskAlphaShift) != 0);
 #elif defined(Q_OS_UNIX)
-    if (QX11Info::isPlatformX11() && QX11Info::display()) {
+    QPlatformNativeInterface* native = QGuiApplication::platformNativeInterface();
+    auto* display = native->nativeResourceForWindow("display", nullptr);
+    if (!display) {
+        return;
+    }
+
+    const QString platform = QGuiApplication::platformName();
+    if (platform == "xcb") {
         unsigned state = 0;
-        // reinterpret cast needed, since we namespaced the XKBlib.h include
-        if (X11::XkbGetIndicatorState(
-            reinterpret_cast<X11::Display*>(QX11Info::display()), XkbUseCoreKbd, &state) == Success) {
+        if (X11::XkbGetIndicatorState(reinterpret_cast<X11::Display*>(display), XkbUseCoreKbd, &state) == Success) {
             newCapslockState = ((state & 1u) != 0);
         }
+    } else if (platform == "wayland") {
+//        struct wl_display* waylandDisplay = reinterpret_cast<struct wl_display*>(display);
     }
 #endif
 
