@@ -2,6 +2,14 @@
 <ui version="4.0">
  <class>DatabaseOpenWidget</class>
  <widget class="QWidget" name="DatabaseOpenWidget">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>592</width>
+    <height>522</height>
+   </rect>
+  </property>
   <property name="accessibleName">
    <string>Unlock KeePassXC Database</string>
   </property>
@@ -147,14 +155,28 @@
              </property>
              <layout class="QVBoxLayout" name="verticalLayout_2">
               <item>
-               <widget class="QLabel" name="label">
-                <property name="text">
-                 <string>Enter Password:</string>
-                </property>
-                <property name="buddy">
-                 <cstring>editPassword</cstring>
-                </property>
-               </widget>
+               <layout class="QHBoxLayout" name="horizontalLayout_2" stretch="1,0">
+                <item>
+                 <widget class="QLabel" name="label">
+                  <property name="text">
+                   <string>Enter Password:</string>
+                  </property>
+                  <property name="buddy">
+                   <cstring>editPassword</cstring>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QLabel" name="capsLockWarningLabel">
+                  <property name="styleSheet">
+                   <string notr="true">QLabel { color: rgb(255, 125, 125); }</string>
+                  </property>
+                  <property name="text">
+                   <string>Warning: Caps Lock enabled</string>
+                  </property>
+                 </widget>
+                </item>
+               </layout>
               </item>
               <item>
                <layout class="QHBoxLayout" name="passwordLayout">

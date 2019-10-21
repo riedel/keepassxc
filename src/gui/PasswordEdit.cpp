@@ -22,12 +22,30 @@
 #include "core/FilePath.h"
 #include "gui/Font.h"
 
+#include <QKeyEvent>
+#include <QTimer>
+#include <QProcessEnvironment>
+
+#if defined(Q_OS_WIN)
+#include <windows.h>
+#elif defined(Q_OS_MACOS)
+// TODO
+#elif defined(Q_OS_UNIX)
+#include <QtX11Extras/QX11Info>
+// namespace required to avoid name clashes with declarations in XKBlib.h
+namespace X11
+{
+#include <X11/XKBlib.h>
+}
+#endif
+
 const QColor PasswordEdit::CorrectSoFarColor = QColor(255, 205, 15);
 const QColor PasswordEdit::ErrorColor = QColor(255, 125, 125);
 
 PasswordEdit::PasswordEdit(QWidget* parent)
     : QLineEdit(parent)
     , m_basePasswordEdit(nullptr)
+    , m_capslockPollTimer(new QTimer(this))
 {
     const QIcon errorIcon = filePath()->icon("status", "dialog-error");
     m_errorAction = addAction(errorIcon, QLineEdit::TrailingPosition);
@@ -46,6 +64,8 @@ PasswordEdit::PasswordEdit(QWidget* parent)
     QFont passwordFont = Font::fixedFont();
     passwordFont.setLetterSpacing(QFont::PercentageSpacing, 110);
     setFont(passwordFont);
+
+    connect(m_capslockPollTimer, SIGNAL(timeout()), SLOT(checkCapslockState()));
 }
 
 void PasswordEdit::enableVerifyMode(PasswordEdit* basePasswordEdit)
@@ -117,5 +137,45 @@ void PasswordEdit::autocompletePassword(const QString& password)
 {
     if (config()->get("security/passwordsrepeat").toBool() && echoMode() == QLineEdit::Normal) {
         setText(password);
+    }
+}
+
+void PasswordEdit::hideEvent(QHideEvent* event)
+{
+    QWidget::hideEvent(event);
+    m_capslockPollTimer->stop();
+}
+
+void PasswordEdit::showEvent(QShowEvent* event)
+{
+    QWidget::showEvent(event);
+    if (!m_basePasswordEdit) {
+        // poll caps lock state only for primary password edits
+        m_capslockPollTimer->start(50);
+    }
+}
+
+void PasswordEdit::checkCapslockState()
+{
+    bool newCapslockState = m_capslockState;
+
+#if defined(Q_OS_WIN)
+    newCapslockState = (GetKeyState(VK_CAPITAL) == 1);
+#elif defined(Q_OS_MACOS)
+    // TODO
+#elif defined(Q_OS_UNIX)
+    if (QX11Info::isPlatformX11() && QX11Info::display()) {
+        unsigned state = 0;
+        // reinterpret cast needed, since we namespaced the XKBlib.h include
+        if (X11::XkbGetIndicatorState(
+            reinterpret_cast<X11::Display*>(QX11Info::display()), XkbUseCoreKbd, &state) == Success) {
+            newCapslockState = ((state & 1u) == 1);
+        }
+    }
+#endif
+
+    if (newCapslockState != m_capslockState) {
+        m_capslockState = newCapslockState;
+        emit capslockToggled(m_capslockState);
     }
 }

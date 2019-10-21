@@ -82,6 +82,12 @@ DatabaseOpenWidget::DatabaseOpenWidget(QWidget* parent)
     m_ui->yubikeyProgress->setSizePolicy(sp);
 
     connect(m_ui->buttonRedetectYubikey, SIGNAL(clicked()), SLOT(pollYubikey()));
+
+    m_ui->capsLockWarningLabel->setVisible(false);
+    connect(m_ui->editPassword, &PasswordEdit::capslockToggled, [&](bool state) {
+        m_ui->capsLockWarningLabel->setVisible(state);
+    });
+
 #else
     m_ui->hardwareKeyLabel->setVisible(false);
     m_ui->hardwareKeyLabelHelp->setVisible(false);

@@ -23,6 +23,8 @@
 #include <QLineEdit>
 #include <QPointer>
 
+class QTimer;
+
 class PasswordEdit : public QLineEdit
 {
     Q_OBJECT
@@ -38,19 +40,27 @@ public:
 public slots:
     void setShowPassword(bool show);
 
+protected:
+    void showEvent(QShowEvent* event) override;
+    void hideEvent(QHideEvent* event) override;
+
 signals:
     void showPasswordChanged(bool show);
+    void capslockToggled(bool capslockOn);
 
 private slots:
     void updateStylesheet();
     void autocompletePassword(const QString& password);
+    void checkCapslockState();
 
 private:
     bool passwordsEqual() const;
 
+    bool m_capslockState = false;
     QPointer<QAction> m_errorAction;
     QPointer<QAction> m_correctAction;
     QPointer<PasswordEdit> m_basePasswordEdit;
+    QPointer<QTimer> m_capslockPollTimer;
 };
 
 #endif // KEEPASSX_PASSWORDEDIT_H
