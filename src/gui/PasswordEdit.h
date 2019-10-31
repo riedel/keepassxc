@@ -23,6 +23,18 @@
 #include <QLineEdit>
 #include <QPointer>
 
+#if defined(Q_OS_UNIX) && !defined(Q_OS_MACOS)
+#include <QScopedPointer>
+
+namespace KWayland
+{
+namespace Client
+{
+class Registry;
+}
+}
+#endif
+
 class PasswordEdit : public QLineEdit
 {
     Q_OBJECT
@@ -32,6 +44,7 @@ public:
     static const QColor ErrorColor;
 
     explicit PasswordEdit(QWidget* parent = nullptr);
+    virtual ~PasswordEdit();
     void enableVerifyMode(PasswordEdit* baseEdit);
     bool isPasswordVisible() const;
 
@@ -52,6 +65,10 @@ private slots:
 
 private:
     bool passwordsEqual() const;
+
+#if defined(Q_OS_UNIX) && !defined(Q_OS_MACOS)
+    QScopedPointer<KWayland::Client::Registry> m_wlRegistry;
+#endif
 
     bool m_capslockState = false;
     QPointer<QAction> m_errorAction;

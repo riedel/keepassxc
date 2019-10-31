@@ -30,12 +30,14 @@
 #elif defined(Q_OS_MACOS)
 #include <CoreGraphics/CGEventSource.h>
 #elif defined(Q_OS_UNIX)
-#include <QtX11Extras/QX11Info>
 // namespace required to avoid name clashes with declarations in XKBlib.h
 namespace X11
 {
 #include <X11/XKBlib.h>
 }
+#include <KF5/KWayland/Client/registry.h>
+#include <KF5/KWayland/Client/seat.h>
+#include <KF5/KWayland/Client/keyboard.h>
 #endif
 
 const QColor PasswordEdit::CorrectSoFarColor = QColor(255, 205, 15);
@@ -62,6 +64,10 @@ PasswordEdit::PasswordEdit(QWidget* parent)
     QFont passwordFont = Font::fixedFont();
     passwordFont.setLetterSpacing(QFont::PercentageSpacing, 110);
     setFont(passwordFont);
+}
+
+PasswordEdit::~PasswordEdit()
+{
 }
 
 void PasswordEdit::enableVerifyMode(PasswordEdit* basePasswordEdit)
@@ -149,6 +155,7 @@ void PasswordEdit::checkCapslockState()
 {
     bool newCapslockState = m_capslockState;
     Q_UNUSED(m_capslockState)
+    const QString platform = QGuiApplication::platformName();
 
 #if defined(Q_OS_WIN)
     newCapslockState = (GetKeyState(VK_CAPITAL) == 1);
@@ -161,18 +168,39 @@ void PasswordEdit::checkCapslockState()
         return;
     }
 
-    const QString platform = QGuiApplication::platformName();
     if (platform == "xcb") {
         unsigned state = 0;
         if (X11::XkbGetIndicatorState(reinterpret_cast<X11::Display*>(display), XkbUseCoreKbd, &state) == Success) {
             newCapslockState = ((state & 1u) != 0);
         }
     } else if (platform == "wayland") {
-//        struct wl_display* waylandDisplay = reinterpret_cast<struct wl_display*>(display);
+        if (!m_wlRegistry) {
+            auto* wlDisplay = reinterpret_cast<struct wl_display*>(display);
+            m_wlRegistry.reset(new KWayland::Client::Registry());
+            m_wlRegistry->create(wlDisplay);
+            m_wlRegistry->setup();
+            connect(m_wlRegistry.data(), &KWayland::Client::Registry::seatAnnounced, [this](quint32 name, quint32 version) {
+                auto* wlSeat = new KWayland::Client::Seat(m_wlRegistry.data());
+                wlSeat->setup(m_wlRegistry->bindSeat(name, version));
+                connect(wlSeat, &KWayland::Client::Seat::hasKeyboardChanged, [wlSeat, this](bool hasKeyboard) {
+                    if (hasKeyboard) {
+                        auto* keyboard = wlSeat->createKeyboard(wlSeat);
+                        connect(keyboard, &KWayland::Client::Keyboard::modifiersChanged,
+                            [this](quint32 depressed, quint32 latched, quint32 locked, quint32 group) {
+                            Q_UNUSED(depressed)
+                            Q_UNUSED(latched)
+                            Q_UNUSED(group)
+                            m_capslockState = (locked & 2u) != 0;
+                            emit capslockToggled(m_capslockState);
+                        });
+                    }
+                });
+            });
+        }
     }
 #endif
 
-    if (newCapslockState != m_capslockState) {
+    if (platform != "wayland" && newCapslockState != m_capslockState) {
         m_capslockState = newCapslockState;
         emit capslockToggled(m_capslockState);
     }
