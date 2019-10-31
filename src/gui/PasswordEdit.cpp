@@ -23,7 +23,6 @@
 #include "gui/Font.h"
 
 #include <QGuiApplication>
-#include <qpa/qplatformnativeinterface.h>
 
 #if defined(Q_OS_WIN)
 #include <windows.h>
@@ -31,6 +30,7 @@
 #include <CoreGraphics/CGEventSource.h>
 #elif defined(Q_OS_UNIX)
 // namespace required to avoid name clashes with declarations in XKBlib.h
+#include <qpa/qplatformnativeinterface.h>
 namespace X11
 {
 #include <X11/XKBlib.h>
@@ -38,6 +38,7 @@ namespace X11
 #include <KF5/KWayland/Client/registry.h>
 #include <KF5/KWayland/Client/seat.h>
 #include <KF5/KWayland/Client/keyboard.h>
+#include <KF5/KWayland/Client/keystate.h>
 #endif
 
 const QColor PasswordEdit::CorrectSoFarColor = QColor(255, 205, 15);
@@ -151,6 +152,7 @@ bool PasswordEdit::event(QEvent* event)
     return QLineEdit::event(event);
 }
 
+#include <iostream>
 void PasswordEdit::checkCapslockState()
 {
     bool newCapslockState = m_capslockState;
@@ -179,6 +181,19 @@ void PasswordEdit::checkCapslockState()
             m_wlRegistry.reset(new KWayland::Client::Registry());
             m_wlRegistry->create(wlDisplay);
             m_wlRegistry->setup();
+
+            // KDE-only (org_kde_kwin_keystate protocol extension needs to be available)
+            connect(m_wlRegistry.data(), &KWayland::Client::Registry::keystateAnnounced, [this](quint32 name, quint32 version) {
+                auto* keystate = m_wlRegistry->createKeystate(name, version, m_wlRegistry.data());
+                connect(keystate, &KWayland::Client::Keystate::stateChanged,
+                    [this](KWayland::Client::Keystate::Key key, KWayland::Client::Keystate::State state) {
+                    if (key == KWayland::Client::Keystate::Key::CapsLock) {
+                        emit capslockToggled(state == KWayland::Client::Keystate::Locked);
+                    }
+                });
+            });
+
+            // Plain Wayland
             connect(m_wlRegistry.data(), &KWayland::Client::Registry::seatAnnounced, [this](quint32 name, quint32 version) {
                 auto* wlSeat = new KWayland::Client::Seat(m_wlRegistry.data());
                 wlSeat->setup(m_wlRegistry->bindSeat(name, version));
