@@ -1,0 +1,9 @@
+DatabaseWidget:!active, GroupView:!active,
+EntryPreviewWidget QLineEdit:!active, EntryPreviewWidget QTextEdit:!active {
+    background-color: #3B3B3B;
+}
+
+DatabaseWidget:disabled, GroupView:disabled,
+EntryPreviewWidget QLineEdit:disabled, EntryPreviewWidget QTextEdit:disabled {
+    background-color: #404040;
+}

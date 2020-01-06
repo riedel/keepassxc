@@ -29,6 +29,8 @@
 #include "gui/Application.h"
 #include "gui/MainWindow.h"
 #include "gui/MessageBox.h"
+#include "gui/styles/dark/DarkStyle.h"
+#include "gui/styles/light/LightStyle.h"
 
 #if defined(WITH_ASAN) && defined(WITH_LSAN)
 #include <sanitizer/lsan_interface.h>
@@ -60,6 +62,14 @@ int main(int argc, char** argv)
     Application app(argc, argv);
     Application::setApplicationName("KeePassXC");
     Application::setApplicationVersion(KEEPASSXC_VERSION);
+
+    QString appTheme = config()->get("GUI/ApplicationTheme").toString();
+    if (appTheme == "light") {
+        QApplication::setStyle(new LightStyle);
+    } else if (appTheme == "dark") {
+        QApplication::setStyle(new DarkStyle);
+    }
+
     // don't set organizationName as that changes the return value of
     // QStandardPaths::writableLocation(QDesktopServices::DataLocation)
     Bootstrap::bootstrapApplication();

@@ -263,7 +263,7 @@ void KMessageWidget::setMessageType(KMessageWidget::MessageType type)
 {
     d->messageType = type;
     QColor bg0, bg1, bg2, border;
-    QColor fg = palette().light().color();
+    QColor fg = QColor(238, 238, 238);
     switch (type) {
     case Positive:
         bg1.setRgb(37, 163, 83);
@@ -273,7 +273,7 @@ void KMessageWidget::setMessageType(KMessageWidget::MessageType type)
         break;
     case Warning:
         bg1.setRgb(252, 193, 57);
-        fg = palette().windowText().color();
+        fg = QColor(48, 48, 48);
         break;
     case Error:
         bg1.setRgb(198, 69, 21);

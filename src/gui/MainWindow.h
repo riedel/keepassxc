@@ -83,6 +83,7 @@ protected:
 
 private slots:
     void setMenuActionState(DatabaseWidget::Mode mode = DatabaseWidget::Mode::None);
+    void adjustToTabVisibilityChange(bool tabsVisible);
     void updateWindowTitle();
     void showAboutDialog();
     void showUpdateCheckStartup();
@@ -164,6 +165,7 @@ private:
     bool m_appExitCalled = false;
     bool m_appExiting = false;
     bool m_contextMenuFocusLock = false;
+    bool m_showToolbarSeparator = false;
     uint m_lastFocusOutTime = 0;
     QTimer m_trayIconTriggerTimer;
     QSystemTrayIcon::ActivationReason m_trayIconTriggerReason;
