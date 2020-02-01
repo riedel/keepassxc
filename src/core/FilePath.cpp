@@ -95,42 +95,22 @@ QString FilePath::wordlistPath(const QString& name)
 
 QIcon FilePath::applicationIcon()
 {
-#ifdef KEEPASSXC_DIST_SNAP
-    return icon("apps", "keepassxc", false);
-#else
     return icon("apps", "keepassxc");
-#endif
 }
 
 QIcon FilePath::trayIcon()
 {
-    bool darkIcon = useDarkIcon();
-
-#ifdef KEEPASSXC_DIST_SNAP
-    return (darkIcon) ? icon("apps", "keepassxc-dark", false) : icon("apps", "keepassxc", false);
-#else
-    return (darkIcon) ? icon("apps", "keepassxc-dark") : icon("apps", "keepassxc");
-#endif
+    return useDarkIcon() ? icon("apps", "keepassxc-dark") : icon("apps", "keepassxc");
 }
 
 QIcon FilePath::trayIconLocked()
 {
-#ifdef KEEPASSXC_DIST_SNAP
-    return icon("apps", "keepassxc-locked", false);
-#else
     return icon("apps", "keepassxc-locked");
-#endif
 }
 
 QIcon FilePath::trayIconUnlocked()
 {
-    bool darkIcon = useDarkIcon();
-
-#ifdef KEEPASSXC_DIST_SNAP
-    return darkIcon ? icon("apps", "keepassxc-dark", false) : icon("apps", "keepassxc-unlocked", false);
-#else
-    return darkIcon ? icon("apps", "keepassxc-dark") : icon("apps", "keepassxc-unlocked");
-#endif
+    return useDarkIcon() ? icon("apps", "keepassxc-dark") : icon("apps", "keepassxc-unlocked");
 }
 
 QIcon FilePath::icon(const QString& category, const QString& name)
