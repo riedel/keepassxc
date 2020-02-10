@@ -1379,6 +1379,11 @@ bool DatabaseWidget::lock()
         return true;
     }
 
+    // Don't try to lock the database while saving, this will cause a deadlock
+    if (m_db->isSaving()) {
+        return false;
+    }
+
     emit databaseLockRequested();
 
     clipboard()->clearCopiedText();

@@ -159,6 +159,15 @@ bool Database::open(const QString& filePath, QSharedPointer<const CompositeKey> 
     return true;
 }
 
+bool Database::isSaving()
+{
+    bool locked = m_saveMutex.tryLock();
+    if (locked) {
+        m_saveMutex.unlock();
+    }
+    return !locked;
+}
+
 /**
  * Save the database to the current file path. It is an error to call this function
  * if no file path has been defined.
@@ -201,7 +210,20 @@ bool Database::save(QString* error, bool atomic, bool backup)
  */
 bool Database::saveAs(const QString& filePath, QString* error, bool atomic, bool backup)
 {
+    // Prevent re-entrance if save is called while already saving
+    QMutexLocker locker(&m_saveMutex);
+    // Never save an uninitialized database
+    if (!m_initialized) {
+        return false;
+    }
+
     if (filePath == m_data.filePath) {
+        // Check if we actually have to save after clearing the mutex block
+        // this only applies if we are saving to the same file
+        if (!isModified()) {
+            return true;
+        }
+
         // Disallow saving to the same file if read-only
         if (m_data.isReadOnly) {
             Q_ASSERT_X(false, "Database::saveAs", "Could not save, database file is read-only.");
@@ -389,6 +411,8 @@ bool Database::import(const QString& xmlExportPath, QString* error)
 
 void Database::releaseData()
 {
+    QMutexLocker locker(&m_saveMutex);
+
     s_uuidMap.remove(m_uuid);
     m_uuid = QUuid();
 
@@ -397,22 +421,20 @@ void Database::releaseData()
     }
 
     m_data.clear();
+    m_metadata->clear();
 
     if (m_rootGroup && m_rootGroup->parent() == this) {
         delete m_rootGroup;
     }
-    if (m_metadata) {
-        delete m_metadata;
-    }
-    if (m_fileWatcher) {
-        delete m_fileWatcher;
-    }
+
+    m_fileWatcher->stop();
 
     m_deletedObjects.clear();
     m_commonUsernames.clear();
 
     m_initialized = false;
     m_modified = false;
+    m_modifiedTimer.stop();
 }
 
 /**
