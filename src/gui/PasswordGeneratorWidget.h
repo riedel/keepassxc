@@ -54,9 +54,6 @@ public:
     QString getGeneratedPassword();
     bool isPasswordVisible() const;
 
-protected:
-    void showEvent(QShowEvent* event) override;
-
 public slots:
     void regeneratePassword();
     void applyPassword();
@@ -65,13 +62,12 @@ public slots:
 
 signals:
     void appliedPassword(const QString& password);
-    void dialogTerminated();
+    void closePasswordGenerator();
 
 private slots:
     void updateButtonsEnabled(const QString& password);
     void updatePasswordStrength(const QString& password);
-    void selectSimpleMode();
-    void selectAdvancedMode();
+    void setAdvancedMode(bool state);
     void excludeHexChars();
 
     void passwordSliderMoved();
