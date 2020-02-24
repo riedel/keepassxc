@@ -94,7 +94,7 @@ public:
      * @param slot the yubikey slot.
      * @param errorMessage populated if an error occured.
      *
-     * @return whether the key is blocking or not.
+     * @return whether the key is blocking (touch needed) or not.
      */
     bool checkSlotIsBlocking(int slot, QString& errorMessage);
 signals:
@@ -121,9 +121,7 @@ private:
     static YubiKey* m_instance;
 
     // Create void ptr here to avoid ifdef header include mess
-    void* m_yk_void;
-    void* m_ykds_void;
-    bool m_onlyKey;
+    struct fido_dev * m_dev;
 
     QMutex m_mutex;
 

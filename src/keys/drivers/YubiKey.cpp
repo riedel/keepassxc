@@ -18,11 +18,6 @@
 
 #include <stdio.h>
 
-#include <ykcore.h>
-#include <ykdef.h>
-#include <ykpers-version.h>
-#include <ykstatus.h>
-#include <yubikey.h>
 
 #include "core/Global.h"
 #include "core/Tools.h"
@@ -30,16 +25,19 @@
 
 #include "YubiKey.h"
 
+extern "C" {
+#include "fido.h"
+}
+
 // Cast the void pointer from the generalized class definition
 // to the proper pointer type from the now included system headers
-#define m_yk (static_cast<YK_KEY*>(m_yk_void))
-#define m_ykds (static_cast<YK_STATUS*>(m_ykds_void))
 
-YubiKey::YubiKey()
-    : m_yk_void(nullptr)
-    , m_ykds_void(nullptr)
-    , m_onlyKey(false)
-    , m_mutex(QMutex::Recursive)
+#define MAX_DEVICES_TO_LIST 20
+
+
+YubiKey::YubiKey() 
+    :  m_dev(nullptr)
+    ,  m_mutex(QMutex::Recursive)
 {
 }
 
@@ -58,49 +56,47 @@ bool YubiKey::init()
 {
     m_mutex.lock();
 
-    // previously initialized
-    if (m_yk != nullptr && m_ykds != nullptr) {
-
-        if (yk_get_status(m_yk, m_ykds)) {
-            // Still connected
-            m_mutex.unlock();
-            return true;
-        } else {
-            // Initialized but not connected anymore, re-init
-            deinit();
-        }
+// previously initialized
+    
+    if (m_dev != nullptr) {
+	    //TODO: ping?
+        return true;
     }
 
-    if (!yk_init()) {
-        m_mutex.unlock();
-        return false;
+    fido_dev_info_t *devlist = fido_dev_info_new(MAX_DEVICES_TO_LIST);
+    size_t ndevs;
+
+    fido_dev_info_manifest(devlist, MAX_DEVICES_TO_LIST, &ndevs);
+
+    for (size_t i = 0; i < ndevs ; i++) {
+	    const fido_dev_info_t *di = fido_dev_info_ptr(devlist, i);
+	    fido_dev_t *dev = fido_dev_new();
+	    fido_dev_open(dev,fido_dev_info_path(di));
+
+        fido_cbor_info_t * cbor= fido_cbor_info_new();
+	    fido_dev_get_cbor_info(dev, cbor);
+	    
+	    char *const *extensions = fido_cbor_info_extensions_ptr(cbor);
+	    size_t extensions_length = fido_cbor_info_extensions_len(cbor);
+
+	    for (size_t j = 0; j < extensions_length; j++) {
+		    if (strcmp("hmac-secret", extensions[j]) == 0) {
+			    m_dev = dev;
+		    }
+	    }
+
+	    fido_cbor_info_free(&cbor);
+
+	    if (m_dev==nullptr) fido_dev_close(dev);
+	    else break;
     }
 
-    // TODO: handle multiple attached hardware devices
-    m_onlyKey = false;
-    m_yk_void = static_cast<void*>(yk_open_first_key());
-#if YKPERS_VERSION_NUMBER >= 0x011400
-    // New fuction available in yubikey-personalization version >= 1.20.0 that allows
-    // selecting device VID/PID (yk_open_key_vid_pid)
-    if (m_yk == nullptr) {
-        static const int device_pids[] = {0x60fc}; // OnlyKey PID
-        m_yk_void = static_cast<void*>(yk_open_key_vid_pid(0x1d50, device_pids, 1, 0));
-        m_onlyKey = true;
-    }
-#endif
-    if (m_yk == nullptr) {
-        yk_release();
-        m_mutex.unlock();
-        return false;
-    }
+    fido_dev_info_free(&devlist,MAX_DEVICES_TO_LIST);
 
-    m_ykds_void = static_cast<void*>(ykds_alloc());
-    if (m_ykds == nullptr) {
-        yk_close_key(m_yk);
-        m_yk_void = nullptr;
-        yk_release();
-        m_mutex.unlock();
-        return false;
+    if (m_dev == nullptr) {
+	    deinit();
+	    m_mutex.unlock();
+	    return false;
     }
 
     m_mutex.unlock();
@@ -109,162 +105,141 @@ bool YubiKey::init()
 
 bool YubiKey::deinit()
 {
-    m_mutex.lock();
+	m_mutex.lock();
 
-    if (m_yk) {
-        yk_close_key(m_yk);
-        m_yk_void = nullptr;
-    }
+	fido_dev_close(m_dev);
 
-    if (m_ykds) {
-        ykds_free(m_ykds);
-        m_ykds_void = nullptr;
-    }
+	m_mutex.unlock();
 
-    yk_release();
-
-    m_mutex.unlock();
-
-    return true;
+	return true;
 }
 
 void YubiKey::detect()
 {
-    bool found = false;
 
-    // Check slot 1 and 2 for Challenge-Response HMAC capability
-    for (int i = 1; i <= 2; ++i) {
-        QString errorMsg;
-        bool isBlocking = checkSlotIsBlocking(i, errorMsg);
-        if (errorMsg.isEmpty()) {
-            found = true;
-            emit detected(i, isBlocking);
-        }
-
-        // Wait between slots to let the yubikey settle.
-        Tools::sleep(150);
-    }
-
-    if (!found) {
-        emit notFound();
-    } else {
-        emit detectComplete();
-    }
+    emit detected(0, true);
+    emit detectComplete();
 }
 
 bool YubiKey::checkSlotIsBlocking(int slot, QString& errorMessage)
 {
-    if (!init()) {
-        errorMessage = QString("Could not initialize YubiKey.");
-        return false;
-    }
-
-    YubiKey::ChallengeResult result;
-    QByteArray rand = randomGen()->randomArray(1);
-    QByteArray resp;
-
-    result = challenge(slot, false, rand, resp);
-    if (result == ALREADY_RUNNING) {
-        // Try this slot again after waiting
-        Tools::sleep(300);
-        result = challenge(slot, false, rand, resp);
-    }
-
-    if (result == SUCCESS || result == WOULDBLOCK) {
-        return result == WOULDBLOCK;
-    } else if (result == ALREADY_RUNNING) {
-        errorMessage = QString("YubiKey busy");
-        return false;
-    } else if (result == ERROR) {
-        errorMessage = QString("YubiKey error");
-        return false;
-    }
-
-    errorMessage = QString("Error while polling YubiKey");
-    return false;
+	if (!init()) {
+		errorMessage = QString("Could not initialize YubiKey.");
+		return false;
+	}
+    if(slot!=0)
+        qWarning("Unknown slot ?");
+    //I guess we always need to touch
+	return true;
 }
+
 
 bool YubiKey::getSerial(unsigned int& serial)
 {
-    m_mutex.lock();
-    int result = yk_get_serial(m_yk, 1, 0, &serial);
-    m_mutex.unlock();
+	//TODO
+	serial=42;
 
-    if (!result) {
-        return false;
-    }
-
-    return true;
+	return true;
 }
 
 QString YubiKey::getVendorName()
 {
-    return m_onlyKey ? "OnlyKey" : "YubiKey";
+	//TODO 
+	return "FIDO2";
+        //return	fido_dev_info_manufacturer_string(m_dev);
 }
 
-YubiKey::ChallengeResult YubiKey::challenge(int slot, bool mayBlock, const QByteArray& challenge, QByteArray& response)
+YubiKey::ChallengeResult YubiKey::challenge(int slot, bool mayBlock, const QByteArray& unpaddedChallenge, QByteArray& response)
 {
-    // ensure that YubiKey::init() succeeded
-    if (!init()) {
+	// ensure that YubiKey::init() succeeded
+	if (!init()) {
+		return ERROR;
+	}
+
+    if (slot!=0)
+        qWarning("No slots supported!!");
+
+    if (!mayBlock) {
+        qFatal("Is it a problem that we may not block?");
         return ERROR;
     }
 
-    int yk_cmd = (slot == 1) ? SLOT_CHAL_HMAC1 : SLOT_CHAL_HMAC2;
-    QByteArray paddedChallenge = challenge;
 
-    // yk_challenge_response() insists on 64 bytes response buffer */
-    response.clear();
-    response.resize(64);
+	QByteArray paddedChallenge = unpaddedChallenge;
 
-    /* The challenge sent to the yubikey should always be 64 bytes for
-     * compatibility with all configurations.  Follow PKCS7 padding.
-     *
-     * There is some question whether or not 64 bytes fixed length
-     * configurations even work, some docs say avoid it.
-     */
-    const int padLen = 64 - paddedChallenge.size();
-    if (padLen > 0) {
-        paddedChallenge.append(QByteArray(padLen, padLen));
+	// yk_challenge_response() insists on 64 bytes response buffer */
+	response.clear();
+	response.resize(64);
+
+	/* The challenge sent to the yubikey should always be 64 bytes for
+	 * compatibility with all configurations.  Follow PKCS7 padding.
+	 *
+	 * There is some question whether or not 64 bytes fixed length
+	 * configurations even work, some docs say avoid it.
+	 */
+
+    const int padLen = 32 - paddedChallenge.size();
+	if (padLen > 0) {
+		paddedChallenge.append(QByteArray(padLen, padLen));
+	}
+
+	const unsigned char* challenge;
+	challenge = reinterpret_cast<const unsigned char*>(paddedChallenge.constData());
+
+	// Try to grab a lock for 1 second, fail out if not possible
+	if (!m_mutex.tryLock(1000)) {
+		return ALREADY_RUNNING;
+	}
+
+	int r;
+
+
+	fido_assert_t *assert;
+
+	if ((assert = fido_assert_new()) == NULL)
+    {
+        qCritical("fido_assert_new");
+        return ERROR;
     }
 
-    const unsigned char* c;
-    unsigned char* r;
-    c = reinterpret_cast<const unsigned char*>(paddedChallenge.constData());
-    r = reinterpret_cast<unsigned char*>(response.data());
-
-    // Try to grab a lock for 1 second, fail out if not possible
-    if (!m_mutex.tryLock(1000)) {
-        return ALREADY_RUNNING;
+    if ((r = fido_assert_set_clientdata_hash(assert, challenge,
+          paddedChallenge.size())) != FIDO_OK ||
+			(r = fido_assert_set_rp(assert,"keepassxc.org" )) != FIDO_OK)
+    {
+        qCritical("fido_assert_set: %s", fido_strerr(r));
+        fido_assert_free(&assert);return ERROR;
     }
 
-    int ret = yk_challenge_response(m_yk, yk_cmd, mayBlock, paddedChallenge.size(), c, response.size(), r);
-    m_mutex.unlock();
-
-    if (!ret) {
-        if (yk_errno == YK_EWOULDBLOCK) {
-            return WOULDBLOCK;
-        } else if (yk_errno == YK_ETIMEOUT) {
-            return ERROR;
-        } else if (yk_errno) {
-
-            /* Something went wrong, close the key, so that the next call to
-             * can try to re-open.
-             *
-             * Likely caused by the YubiKey being unplugged.
-             */
-
-            if (yk_errno == YK_EUSBERR) {
-                qWarning("USB error: %s", yk_usb_strerror());
-            } else {
-                qWarning("YubiKey core error: %s", yk_strerror(yk_errno));
-            }
-
-            return ERROR;
-        }
+	if ((r = fido_assert_set_extensions(assert,
+					FIDO_EXT_HMAC_SECRET)) != FIDO_OK)
+    {
+        qCritical("fido_assert_set_extensions: %s",
+				fido_strerr(r));
+        fido_assert_free(&assert);return ERROR;
     }
 
-    // actual HMAC-SHA1 response is only 20 bytes
-    response.resize(20);
+	if ((r = fido_assert_set_hmac_salt(assert, challenge,
+                    paddedChallenge.size())) != FIDO_OK)
+    {
+        qCritical("fido_assert_set_hmac_salt: %s",
+				fido_strerr(r));
+        fido_assert_free(&assert);return ERROR;
+    }
 
-    return SUCCESS;
+	if ((r = fido_dev_get_assert(m_dev,assert,NULL)) != FIDO_OK )
+    {
+        qCritical("fido_assert_get_assert: %s",fido_strerr(r));
+        fido_assert_free(&assert);return ERROR;
+    }
+
+    size_t len=fido_assert_hmac_secret_len(assert, 0);
+    response.resize(len);
+    response.replace(0,len,reinterpret_cast<const char *>(fido_assert_hmac_secret_ptr(assert, 0)));
+	fido_assert_free(&assert);
+
+
+	// actual HMAC-SHA1 response is only 20 bytes
+    //
+
+	return SUCCESS;
 }

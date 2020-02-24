@@ -19,7 +19,10 @@ set(YUBIKEY_INCLUDE_DIRS ${YUBIKEY_CORE_INCLUDE_DIR} ${YUBIKEY_PERS_INCLUDE_DIR}
 
 find_library(YUBIKEY_CORE_LIBRARY NAMES yubikey.dll libyubikey.so yubikey)
 find_library(YUBIKEY_PERS_LIBRARY NAMES ykpers-1.dll libykpers-1.so ykpers-1)
-set(YUBIKEY_LIBRARIES ${YUBIKEY_CORE_LIBRARY} ${YUBIKEY_PERS_LIBRARY})
+find_library(FIDO2_LIBRARY NAMES fido2.dll fido2.so fido2)
+find_library(CBOR_LIBRARY NAMES cbor.dll cbor.so cbor)
+
+set(YUBIKEY_LIBRARIES ${YUBIKEY_CORE_LIBRARY} ${YUBIKEY_PERS_LIBRARY} ${FIDO2_LIBRARY} ${CBOR_LIBRARY})
 
 include(FindPackageHandleStandardArgs)
 find_package_handle_standard_args(YubiKey DEFAULT_MSG YUBIKEY_LIBRARIES YUBIKEY_INCLUDE_DIRS)
